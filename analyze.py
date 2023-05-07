@@ -118,11 +118,12 @@ def select_best_scales(scales, edo, consonance_table, count):
 
 
 def analyze():
-    edo = 53
+    edo = 72
     scale_size = 7
     min_step_12edo = 0.5
     max_step_12edo = 2.5
-    max_scales = 4_000
+    max_scales = 8_000
+    consonance_quantile = 0.9
 
     min_step = int(np.ceil(min_step_12edo * edo / 12))
     max_step = int(np.floor(max_step_12edo * edo / 12))
@@ -131,18 +132,22 @@ def analyze():
     logger.debug("Generating scale classes...")
     scales = generate_scale_classes(edo, scale_size, min_step, max_step)
     logger.info(f"Generated {len(scales)} scales.")
+    new_size = min(int(len(scales) * (1 - consonance_quantile)), max_scales)
     if len(scales) < max_scales:
         logger.info(f"No filtering, as {len(scales)} < max_scales.")
     else:
         logger.debug("Filtering scale classes...")
-        scales = select_best_scales(scales, edo, consonance_table, max_scales)
-        logger.info(f"Filtered down to {max_scales} scales.")
+        scales = select_best_scales(scales, edo, consonance_table, new_size)
+        logger.info(f"Filtered down to {new_size} scales.")
 
     logger.debug("Computing features...")
     interval_vectors = np.array([interval_vector(scale, edo) for scale in scales])
     consonances = np.array([
         np.dot(vector, consonance_table) for vector in interval_vectors
     ])
+    # Given a set of IV that sum to constants, the L2 norm of sqrt(IV) will sum to a constant.
+    interval_vectors_l2 = np.sqrt(interval_vectors)
+    # The actual L2 norms of each IV will become unity in a later step.
 
     balance = np.array([
         1 - np.abs(np.sum(np.exp(1j * 2 * np.pi * scale / edo))) / scale_size
@@ -150,14 +155,29 @@ def analyze():
     ])
     smallest_thirds = np.array([smallest_third(scale, edo) for scale in scales])
 
-    features = np.concatenate([
-        interval_vectors,
-        consonances[:, np.newaxis],
-        balance[:, np.newaxis],
-        smallest_thirds[:, np.newaxis],
-    ], axis=1)
+    grouped_features = [
+        {"data": interval_vectors_l2, "preprocessing": "l2_norm"},
+        {"data": consonances, "weight": 6.0},
+        {"data": balance},
+        {"data": smallest_thirds},
+    ]
+    for group in grouped_features:
+        data = group["data"]
+        if data.ndim == 1:
+            data = data[:, None]
+        preprocessing = group.get("preprocess", "standard_scaler")
+        if preprocessing == "standard_scaler":
+            scaler = sklearn.preprocessing.StandardScaler()
+            data = scaler.fit_transform(data)
+        elif preprocessing == "l2_norm":
+            data = sklearn.preprocessing.normalize(data, norm="l2")
+        else:
+            raise ValueError("Incorrect preprocessing step")
+        data = data * group.get("weight", 1.0)
+        group["data"] = data
+    features = np.concatenate([group["data"] for group in grouped_features], axis=1)
 
-    n_neighbors = int(len(scales) ** (1 / 3) / 2)
+    n_neighbors = int(len(scales) ** 0.5 / 2)
     logger.debug("Running UMAP...")
     reducer = umap.UMAP(random_state=0, n_neighbors=n_neighbors)
     points = reducer.fit_transform(features)
@@ -184,9 +204,10 @@ def analyze():
         "normalized_consonances": normalized_consonances.tolist(),
         "points": points.tolist(),
     }
-    with open("out.json", "w") as file:
+    out_file_name = "out.json"
+    with open(out_file_name, "w") as file:
         json.dump(json_export, file, indent=4)
-    logger.info("Data exported to out.json.")
+    logger.info(f"Data exported to {out_file_name}.")
 
 
 if __name__ == "__main__":

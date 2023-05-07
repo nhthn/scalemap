@@ -1,6 +1,8 @@
 import json
 from typing import List
 
+import colorcet
+
 import bokeh.document
 import bokeh.embed.bundle
 import bokeh.embed
@@ -65,11 +67,13 @@ def visualize():
     )
     tap_tool = bokeh.models.TapTool(callback=custom_js)
 
+    default_tools = ["pan", "wheel_zoom", "box_zoom", "save", "reset", "help"]
+    tools = [hover_tool, tap_tool] + default_tools
     plot = bokeh.plotting.figure(
         title=title,
         width=800,
         height=800,
-        tools=[hover_tool, tap_tool, "pan", "wheel_zoom", "box_zoom"],
+        tools=tools,
     )
     plot.grid.visible = False
     plot.axis.visible = False
@@ -84,7 +88,7 @@ def visualize():
         source=source,
         color=bokeh.transform.linear_cmap(
             field_name=color_field_name,
-            palette="Plasma256",
+            palette=colorcet.CET_L18[::-1],
             low=min(source.data[color_field_name]),
             high=max(source.data[color_field_name]),
         ),
