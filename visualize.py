@@ -35,10 +35,14 @@ def visualize():
     max_step = json_import["max_step"]
     points = np.array(json_import["points"])
     scales = json_import["scales"]
-    consonances = json_import["consonances"]
-    normalized_consonances = json_import["normalized_consonances"]
+    scale_class_indices = json_import["scale_class_indices"]
+    consonances = [json_import["consonances"][i] for i in scale_class_indices]
+    normalized_consonances = [json_import["normalized_consonances"][i] for i in scale_class_indices]
 
-    title = f"UMAP of {len(scales)} most consonant {scale_size}-tone {edo}EDO scale classes, step range {min_step}-{max_step}"
+    title = (
+        f"UMAP of {len(scales)} most consonant "
+        f"{scale_size}-tone {edo}EDO scales, step range {min_step}-{max_step}"
+    )
 
     strings = ["{" + ", ".join([str(x) for x in scale]) + "}" for scale in scales]
 
@@ -47,7 +51,7 @@ def visualize():
         "y": points[:, 1],
         "scale": scales,
         "consonance": consonances,
-        "normalized_consonance": json_import["normalized_consonances"],
+        "normalized_consonance": normalized_consonances,
         "string": strings,
     })
 

@@ -13,7 +13,7 @@ async function playScale(scale, edo) {
     }
     sequence = new Tone.Sequence((time, note) => {
         synth.triggerAttackRelease(root * Math.pow(2, note / edo), 0.3);
-    }, scale.concat([edo]));
+    }, scale.concat([scale[0] + edo]));
     sequence.loop = false;
     sequence.start();
 }
